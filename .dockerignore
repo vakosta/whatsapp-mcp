@@ -1,0 +1,8 @@
+.git
+.idea
+*.db
+store/
+.venv/
+__pycache__/
+whatsapp-mcp-server/.venv/
+whatsapp-bridge/store/
