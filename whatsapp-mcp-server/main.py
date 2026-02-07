@@ -15,6 +15,7 @@ from whatsapp import (
     download_media as whatsapp_download_media
 )
 
+import hmac
 import os
 
 # Initialize FastMCP server
@@ -252,6 +253,60 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "message": "Failed to download media"
         }
 
+class BearerAuthMiddleware:
+    """ASGI middleware that validates Bearer token authentication."""
+
+    def __init__(self, app, token: str):
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode()
+
+        if not auth_header.startswith("Bearer "):
+            await self._send_response(send, 401, "Missing or malformed Authorization header")
+            return
+
+        provided_token = auth_header[7:]
+        if not hmac.compare_digest(provided_token, self.token):
+            await self._send_response(send, 403, "Invalid token")
+            return
+
+        await self.app(scope, receive, send)
+
+    @staticmethod
+    async def _send_response(send, status: int, body: str):
+        await send({
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"text/plain")],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body.encode(),
+        })
+
+
 if __name__ == "__main__":
     transport = os.environ.get('MCP_TRANSPORT', 'stdio')
-    mcp.run(transport=transport)
+
+    if transport == "sse":
+        import uvicorn
+
+        app = mcp.sse_app()
+        auth_token = os.environ.get("MCP_AUTH_TOKEN")
+        if auth_token:
+            app = BearerAuthMiddleware(app, auth_token)
+
+        uvicorn.run(
+            app,
+            host=os.environ.get("MCP_HOST", "0.0.0.0"),
+            port=int(os.environ.get("MCP_PORT", "8000")),
+        )
+    else:
+        mcp.run(transport=transport)
