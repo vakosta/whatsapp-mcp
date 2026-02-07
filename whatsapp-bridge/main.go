@@ -896,6 +896,9 @@ func main() {
 			if evt.Event == "code" {
 				fmt.Println("\nScan this QR code with your WhatsApp app:")
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
+				fmt.Println("\nIf the QR code above is not scannable, copy the string below")
+				fmt.Println("and paste it into an online QR code generator (e.g. qr-code-generator.com):")
+				fmt.Println(evt.Code)
 			} else if evt.Event == "success" {
 				connected <- true
 				break
