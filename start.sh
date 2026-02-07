@@ -2,8 +2,10 @@
 set -e
 
 # Map Railway's PORT to MCP SSE port (Railway injects $PORT)
+# Move the Go bridge to an internal port so it doesn't collide
 if [ -n "$PORT" ]; then
   export MCP_PORT="$PORT"
+  export BRIDGE_PORT="${BRIDGE_PORT:-8081}"
 fi
 
 # Default MCP transport to SSE when running in container (can be overridden)
@@ -14,6 +16,9 @@ export DATA_DIR="${DATA_DIR:-/data}"
 
 # Ensure Python MCP server reads the same DB the Go bridge writes to
 export MESSAGES_DB_PATH="${MESSAGES_DB_PATH:-$DATA_DIR/messages.db}"
+
+# Point Python MCP server at the Go bridge's internal port
+export WHATSAPP_API_BASE_URL="${WHATSAPP_API_BASE_URL:-http://localhost:${BRIDGE_PORT:-8080}/api}"
 
 # Trap signals for clean shutdown
 cleanup() {
