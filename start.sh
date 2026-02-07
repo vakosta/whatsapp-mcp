@@ -9,6 +9,9 @@ fi
 # Default MCP transport to SSE when running in container (can be overridden)
 export MCP_TRANSPORT="${MCP_TRANSPORT:-stdio}"
 
+# Ensure Python MCP server reads the same DB the Go bridge writes to
+export MESSAGES_DB_PATH="${MESSAGES_DB_PATH:-/app/store/messages.db}"
+
 # Trap signals for clean shutdown
 cleanup() {
   echo "Shutting down..."
