@@ -419,8 +419,41 @@ func extractMediaInfo(msg *waProto.Message) (mediaType string, filename string, 
 	return "", "", "", nil, nil, nil, 0
 }
 
+// Send a webhook notification for a new message (fire-and-forget)
+func sendWebhookNotification(webhookURL, apiKey, message string, logger waLog.Logger) {
+	body, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+		logger.Warnf("Failed to marshal webhook payload: %v", err)
+		return
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("POST", webhookURL, bytes.NewReader(body))
+	if err != nil {
+		logger.Warnf("Failed to create webhook request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		logger.Warnf("Webhook request failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		logger.Warnf("Webhook returned status %d", resp.StatusCode)
+	} else {
+		logger.Infof("Webhook notification sent successfully (status %d)", resp.StatusCode)
+	}
+}
+
 // Handle regular incoming messages with media support
-func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *events.Message, logger waLog.Logger) {
+func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *events.Message, webhookURL, webhookAPIKey string, logger waLog.Logger) {
 	// Save message to database
 	chatJID := msg.Info.Chat.String()
 	sender := msg.Info.Sender.User
@@ -477,6 +510,19 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
 			fmt.Printf("[%s] %s %s: [%s: %s] %s\n", timestamp, direction, sender, mediaType, filename, content)
 		} else if content != "" {
 			fmt.Printf("[%s] %s %s: %s\n", timestamp, direction, sender, content)
+		}
+
+		// Fire webhook notification if configured
+		if webhookURL != "" {
+			summary := content
+			if summary == "" && mediaType != "" {
+				summary = fmt.Sprintf("[%s]", mediaType)
+			}
+			if len(summary) > 500 {
+				summary = summary[:500]
+			}
+			webhookMsg := fmt.Sprintf("WhatsApp message from %s in %s: %s", sender, name, summary)
+			go sendWebhookNotification(webhookURL, webhookAPIKey, webhookMsg, logger)
 		}
 	}
 }
@@ -859,12 +905,19 @@ func main() {
 	}
 	defer messageStore.Close()
 
+	// Read webhook configuration
+	webhookURL := os.Getenv("WEBHOOK_URL")
+	webhookAPIKey := os.Getenv("WEBHOOK_API_KEY")
+	if webhookURL != "" {
+		logger.Infof("Webhook notifications enabled: %s", webhookURL)
+	}
+
 	// Setup event handling for messages and history sync
 	client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Message:
 			// Process regular messages
-			handleMessage(client, messageStore, v, logger)
+			handleMessage(client, messageStore, v, webhookURL, webhookAPIKey, logger)
 
 		case *events.HistorySync:
 			// Process history sync events
