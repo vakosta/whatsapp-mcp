@@ -38,6 +38,9 @@ RUN chmod +x /app/start.sh
 
 WORKDIR /app
 
+# Default persistent data directory (mount a Railway volume here)
+RUN mkdir -p /data
+
 ENV PATH="/app/whatsapp-mcp-server/.venv/bin:$PATH"
 
 EXPOSE 8000

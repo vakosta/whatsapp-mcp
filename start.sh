@@ -9,8 +9,11 @@ fi
 # Default MCP transport to SSE when running in container (can be overridden)
 export MCP_TRANSPORT="${MCP_TRANSPORT:-stdio}"
 
+# Persistent data directory — attach a Railway volume at /data to survive restarts
+export DATA_DIR="${DATA_DIR:-/data}"
+
 # Ensure Python MCP server reads the same DB the Go bridge writes to
-export MESSAGES_DB_PATH="${MESSAGES_DB_PATH:-/app/store/messages.db}"
+export MESSAGES_DB_PATH="${MESSAGES_DB_PATH:-$DATA_DIR/messages.db}"
 
 # Trap signals for clean shutdown
 cleanup() {
